@@ -30,7 +30,15 @@ client.on("message", async (message) => {
       execute(message, serverQueue);
       break;
 
+    case `${prefix}play`:
+      execute(message, serverQueue);
+      break;
+
     case `${prefix}passar`:
+      skip(message, serverQueue);
+      break;
+
+    case `${prefix}skip`:
       skip(message, serverQueue);
       break;
 
@@ -38,12 +46,48 @@ client.on("message", async (message) => {
       seeQueue(message, serverQueue);
       break;
 
+    case `${prefix}queue`:
+      seeQueue(message, serverQueue);
+      break;
+
     case `${prefix}parar`:
+      stop(message, serverQueue);
+      break;
+
+    case `${prefix}stop`:
       stop(message, serverQueue);
       break;
 
     case `${prefix}help`:
       help(message);
+      break;
+
+    case `${prefix}limpar`:
+      cleanQueue(message, serverQueue);
+      break;
+
+    case `${prefix}clear`:
+      cleanQueue(message, serverQueue);
+      break;
+
+    case `${prefix}np`:
+      nowPlaying(message, serverQueue);
+      break;
+
+    case `${prefix}ping`:
+      pong(message);
+      break;
+
+    case `${prefix}v`:
+      version(message);
+      break;
+
+    case `${prefix}pause`:
+      pause(message, serverQueue);
+      break;
+
+    case `${prefix}resume`:
+      resume(message, serverQueue);
       break;
 
     default:
@@ -57,6 +101,12 @@ client.on("message", async (message) => {
 async function execute(message, serverQueue) {
   const args = message.content.split(" ");
 
+  if (args.length > 2 || args.length == 1) {
+    return message.channel.send(
+      "Se atente, você precisa digitar um comando válido! Digite **!help** para ver a lista de comandos."
+    );
+  }
+
   const voiceChannel = message.member.voice.channel;
   if (!voiceChannel)
     return message.channel.send(
@@ -65,7 +115,7 @@ async function execute(message, serverQueue) {
   const permissions = voiceChannel.permissionsFor(message.client.user);
   if (!permissions.has("CONNECT") || !permissions.has("SPEAK")) {
     return message.channel.send(
-      "I need the permissions to join and speak in your voice channel!"
+      "Preciso ter permissão pra acessar esse canal."
     );
   }
 
@@ -100,19 +150,44 @@ async function execute(message, serverQueue) {
     }
   } else {
     serverQueue.songs.push(song);
-    console.log(serverQueue.songs);
-    return message.channel.send(`${song.title} foi adicionada na fila.`);
+    return message.channel.send(
+      `A música **${song.title}** foi adicionada a fila.`
+    );
   }
 }
 
 async function help(message) {
   return message.channel.send(`
-!tocar - Toca uma música a partir de um link do youtube.
-!passar - Passa para a próxima lista da fila.
-!parar - Limpa a fila, e desconecta o bot.
-!fila - Mostra todas as músicas na fila.
-!help - Mostra a lista de comandos
+Estes são os comandos que posso fazer:
+
+${">>> "}${"`!tocar`"} ou ${"`!play`"} - Toca uma música a partir de um link do youtube.
+${"`!passar`"} ou ${"`!skip`"} - Passa para a próxima música da fila de reprodução.
+${"`!np`"} - Mostra a música que está tocando no momento.
+${"`!parar`"} ou ${"`!stop`"} - Desconecta o bot.
+${"`!fila`"} ou ${"`!queue`"} - Mostra todas as músicas na fila.
+${"`!limpar`"} ou ${"`!clear`"} - Limpa a fila de reprodução.
+${"`!help`"} - Mostra a lista de comandos
+${"`!ping`"} - Pong!
 `);
+}
+
+async function pong(message) {
+  return message.channel.send(`**Pong!**`);
+}
+
+async function nowPlaying(message, serverQueue) {
+  if (!serverQueue) {
+    return message.channel.send(
+      "Epa! Parece que não existem músicas na fila de reprodução!"
+    );
+  }
+  return message.channel.send(
+    `${">>> "}Tocando agora 🎶: **${serverQueue.songs[0].title}**`
+  );
+}
+
+async function version(message) {
+  return message.channel.send(`**v1.0.0**`);
 }
 
 function skip(message, serverQueue) {
@@ -121,27 +196,79 @@ function skip(message, serverQueue) {
       "Mas tu é doido ou bebe gás? Tu precisa tá num canal de voz pra passar a música"
     );
   if (!serverQueue)
-    return message.channel.send("Opa! Essa música não pode ser avançada.");
+    return message.channel.send(
+      "Epa! Parece que não existem músicas na fila de reprodução!"
+    );
   serverQueue.connection.dispatcher.end();
 }
 
 function seeQueue(message, serverQueue) {
-  if (!message.member.voice.channel)
+  if (!message.member.voice.channel) {
     return message.channel.send(
       "Oh bicho véi afolozado, tu precisa estar num **canal de voz** pra poder ver a lista"
     );
-  serverQueue.songs.map((data, index) => {
-    return message.channel.send(`${index + 1} - ${data.title}`);
-  });
+  }
+
+  if (serverQueue === undefined) {
+    return message.channel.send(
+      "Epa! Parece que sua lista de reprodução está vazia."
+    );
+  }
+
+  message.channel.send(`${"Estas são as músicas em fila de reprodução: "}
+  ${serverQueue.songs
+    .map((data, index) => {
+      return `${index !== 0 ? "" : ">>> "}${"**"}${index + 1} - ${
+        data.title
+      }${"**"}${"\n\n"}`;
+    })
+    .join("")}
+  `);
 }
 
 function stop(message, serverQueue) {
+  if (serverQueue === undefined) {
+    return message.channel.send("Eu não estou em execução");
+  }
+
   if (!message.member.voice.channel)
     return message.channel.send(
-      "You have to be in a voice channel to stop the music!"
+      "Você precisa estar em um canal de voz para usar este comando."
     );
   serverQueue.songs = [];
   serverQueue.connection.dispatcher.end();
+}
+
+function pause(message, serverQueue) {
+  if (!message.member.voice.channel) {
+    return message.channel.send(
+      "Você precisa estar em um canal de voz para usar este comando."
+    );
+  }
+  if (!serverQueue) {
+    return message.channel.send("Opa! Não há nenhuma música sendo tocada.");
+  }
+  if (serverQueue.connection.dispatcher.paused) {
+    return message.channel.send("Opa! Essa música já está pausada!");
+  }
+  serverQueue.connection.dispatcher.pause();
+  message.channel.send("A música foi pausada.");
+}
+
+function resume(message, serverQueue) {
+  if (!message.member.voice.channel) {
+    return message.channel.send(
+      "Você precisa estar em um canal de voz para usar este comando."
+    );
+  }
+  if (!serverQueue) {
+    return message.channel.send("Opa! Não há nenhuma música sendo tocada.");
+  }
+  if (serverQueue.connection.dispatcher.resumed) {
+    return message.channel.send("Opa! Essa música já está em execução!");
+  }
+  serverQueue.connection.dispatcher.resume();
+  message.channel.send("A música em execução.");
 }
 
 function play(guild, song) {
@@ -160,7 +287,16 @@ function play(guild, song) {
     })
     .on("error", (error) => console.error(error));
   dispatcher.setVolumeLogarithmic(serverQueue.volume / 5);
-  serverQueue.textChannel.send(`Start playing: **${song.title}**`);
+  serverQueue.textChannel.send(`${">>> "}Tocando agora 🎶: **${song.title}**`);
+}
+
+function cleanQueue(message, serverQueue) {
+  if (!message.member.voice.channel)
+    return message.channel.send(
+      "Você precisa estar em um canal de voz para limpar a lista o bot."
+    );
+  serverQueue.songs.splice(1, serverQueue.songs.length);
+  return message.channel.send("A fila foi limpa com sucesso!");
 }
 
 client.login(token);
